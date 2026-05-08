@@ -41,8 +41,8 @@ const MOCK_TICKETS = [
 ];
 
 // ========== Initialize localStorage ==========
-function initData() {
-  if (!localStorage.getItem('initialized')) {
+function initData(forceReset) {
+  if (forceReset || !localStorage.getItem('initialized')) {
     localStorage.setItem('users', JSON.stringify(MOCK_USERS));
     localStorage.setItem('classes', JSON.stringify(MOCK_CLASSES));
     localStorage.setItem('tickets', JSON.stringify(MOCK_TICKETS));
@@ -89,5 +89,5 @@ function getRemainingSeats(classId) {
   return cls.capacity - getTicketCountByClass(classId);
 }
 
-// Initialize on load
+// Initialize on load (do not force reset here, login pages handle reset)
 initData();

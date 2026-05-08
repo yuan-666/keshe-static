@@ -503,6 +503,21 @@ body {
   font-size: 13px;
 }
 
+/* ========== Test Account Hint ========== */
+.test-account-hint {
+  margin-top: 16px;
+  padding: 10px 14px;
+  background: rgba(26, 115, 232, 0.06);
+  border-radius: 8px;
+  font-size: 13px;
+  color: #1a73e8;
+  text-align: center;
+}
+
+.test-account-hint i {
+  margin-right: 4px;
+}
+
 /* ========== Filter Bar ========== */
 .filter-bar {
   display: flex;

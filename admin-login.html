@@ -36,12 +36,18 @@
       <div class="login-links">
         <a href="index.html" class="link-primary">用户登录</a>
       </div>
+      <div class="test-account-hint">
+        <i class="bi bi-info-circle"></i> 测试账号：admin / admin123
+      </div>
     </div>
   </div>
 
   <script src="js/mock-data.js"></script>
   <script src="js/app.js"></script>
   <script>
+    // Reset data to defaults on every visit to login page
+    initData(true);
+
     if (localStorage.getItem('admin') === '1') {
       window.location.href = 'classes.html';
     }
