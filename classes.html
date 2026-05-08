@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>班次管理 - 车票管理系统</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="css/style.css" rel="stylesheet">
+</head>
+<body>
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+    <div class="page-title"><i class="bi bi-table"></i> 班次管理</div>
+
+    <div class="glass-card">
+      <div class="filter-bar">
+        <input type="text" id="searchInput" placeholder="按班次号搜索" oninput="filterClasses()">
+        <input type="text" id="searchDest" placeholder="按目的地搜索" oninput="filterClasses()">
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>班次号</th>
+              <th>出发时间</th>
+              <th>起点</th>
+              <th>终点</th>
+              <th>行程时间</th>
+              <th>容量</th>
+              <th>已售</th>
+              <th>状态</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="classBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="glass-card">
+      <div class="card-title">新增班次</div>
+      <form id="addClassForm" onsubmit="return handleAddClass(event)">
+        <div class="row">
+          <div class="col-md-4">
+            <div class="form-group">
+              <label>出发时间</label>
+              <input type="time" id="newDeparture" required>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="form-group">
+              <label>起点</label>
+              <input type="text" id="newOrigin" placeholder="起点城市" required>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="form-group">
+              <label>终点</label>
+              <input type="text" id="newDestination" placeholder="终点城市" required>
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="col-md-6">
+            <div class="form-group">
+              <label>行程时间</label>
+              <input type="text" id="newDuration" placeholder="如：3h30m" required>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="form-group">
+              <label>容量</label>
+              <input type="number" id="newCapacity" min="1" placeholder="座位数" required>
+            </div>
+          </div>
+        </div>
+        <button type="submit" class="glass-btn btn-success"><i class="bi bi-plus-lg"></i> 新增班次</button>
+      </form>
+    </div>
+  </main>
+
+  <!-- Edit Modal -->
+  <div class="modal-overlay" id="editModal">
+    <div class="modal-box">
+      <div class="modal-title">编辑班次</div>
+      <form id="editForm" onsubmit="return handleEditClass(event)">
+        <input type="hidden" id="editId">
+        <div class="form-group">
+          <label>出发时间</label>
+          <input type="time" id="editDeparture" required>
+        </div>
+        <div class="form-group">
+          <label>起点</label>
+          <input type="text" id="editOrigin" required>
+        </div>
+        <div class="form-group">
+          <label>终点</label>
+          <input type="text" id="editDestination" required>
+        </div>
+        <div class="form-group">
+          <label>行程时间</label>
+          <input type="text" id="editDuration" required>
+        </div>
+        <div class="form-group">
+          <label>容量</label>
+          <input type="number" id="editCapacity" min="1" required>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="glass-btn btn-outline" onclick="closeEditModal()">取消</button>
+          <button type="submit" class="glass-btn"><i class="bi bi-check-lg"></i> 保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="js/mock-data.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    if (!requireAdmin()) throw new Error('Not authorized');
+    renderSidebar('classes');
+
+    function filterClasses() {
+      const searchId = document.getElementById('searchInput').value.trim().toLowerCase();
+      const searchDest = document.getElementById('searchDest').value.trim().toLowerCase();
+      let classes = getClasses();
+
+      if (searchId) {
+        classes = classes.filter(c => c.id.toLowerCase().includes(searchId));
+      }
+      if (searchDest) {
+        classes = classes.filter(c => c.destination.toLowerCase().includes(searchDest));
+      }
+
+      renderClasses(classes);
+    }
+
+    function renderClasses(classes) {
+      const tbody = document.getElementById('classBody');
+      if (classes.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" class="empty-state"><i class="bi bi-inbox"></i>暂无班次数据</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = classes.map(cls => {
+        const sold = getTicketCountByClass(cls.id);
+        const status = getClassStatus(cls.id);
+        const statusBadge = status === 'departed'
+          ? '<span class="badge-status departed">已发出</span>'
+          : '<span class="badge-status pending">待发车</span>';
+        return `<tr>
+          <td><strong>${cls.id}</strong></td>
+          <td>${cls.departure}</td>
+          <td>${cls.origin}</td>
+          <td>${cls.destination}</td>
+          <td>${cls.duration}</td>
+          <td>${cls.capacity}</td>
+          <td>${sold}</td>
+          <td>${statusBadge}</td>
+          <td>
+            <button class="glass-btn btn-outline btn-sm" onclick="openEditModal('${cls.id}')"><i class="bi bi-pencil"></i></button>
+            <button class="glass-btn btn-danger btn-sm" onclick="deleteClass('${cls.id}')"><i class="bi bi-trash"></i></button>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    function handleAddClass(e) {
+      e.preventDefault();
+      const classes = getClasses();
+      const newClass = {
+        id: generateClassId(),
+        departure: document.getElementById('newDeparture').value,
+        origin: document.getElementById('newOrigin').value.trim(),
+        destination: document.getElementById('newDestination').value.trim(),
+        duration: document.getElementById('newDuration').value.trim(),
+        capacity: parseInt(document.getElementById('newCapacity').value)
+      };
+      classes.push(newClass);
+      setClasses(classes);
+      showToast('班次添加成功：' + newClass.id, 'success');
+      document.getElementById('addClassForm').reset();
+      filterClasses();
+      return false;
+    }
+
+    function openEditModal(classId) {
+      const cls = getClassById(classId);
+      if (!cls) return;
+      document.getElementById('editId').value = cls.id;
+      document.getElementById('editDeparture').value = cls.departure;
+      document.getElementById('editOrigin').value = cls.origin;
+      document.getElementById('editDestination').value = cls.destination;
+      document.getElementById('editDuration').value = cls.duration;
+      document.getElementById('editCapacity').value = cls.capacity;
+      document.getElementById('editModal').classList.add('show');
+    }
+
+    function closeEditModal() {
+      document.getElementById('editModal').classList.remove('show');
+    }
+
+    function handleEditClass(e) {
+      e.preventDefault();
+      const id = document.getElementById('editId').value;
+      const classes = getClasses();
+      const idx = classes.findIndex(c => c.id === id);
+      if (idx === -1) return false;
+
+      classes[idx].departure = document.getElementById('editDeparture').value;
+      classes[idx].origin = document.getElementById('editOrigin').value.trim();
+      classes[idx].destination = document.getElementById('editDestination').value.trim();
+      classes[idx].duration = document.getElementById('editDuration').value.trim();
+      classes[idx].capacity = parseInt(document.getElementById('editCapacity').value);
+
+      setClasses(classes);
+      closeEditModal();
+      showToast('班次更新成功', 'success');
+      filterClasses();
+      return false;
+    }
+
+    function deleteClass(classId) {
+      if (!confirm('确定删除班次 ' + classId + ' 吗？')) return;
+      const sold = getTicketCountByClass(classId);
+      if (sold > 0) {
+        showToast('该班次已有售票记录，无法删除', 'error');
+        return;
+      }
+      let classes = getClasses();
+      classes = classes.filter(c => c.id !== classId);
+      setClasses(classes);
+      showToast('班次已删除', 'success');
+      filterClasses();
+    }
+
+    // Close modal on overlay click
+    document.getElementById('editModal').addEventListener('click', function(e) {
+      if (e.target === this) closeEditModal();
+    });
+
+    filterClasses();
+  </script>
+</body>
+</html>

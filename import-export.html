@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>导入导出 - 车票管理系统</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="css/style.css" rel="stylesheet">
+</head>
+<body>
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+    <div class="page-title"><i class="bi bi-box-arrow-in-down"></i> 导入导出</div>
+
+    <div class="row">
+      <div class="col-md-6">
+        <div class="glass-card">
+          <div class="card-title"><i class="bi bi-upload"></i> 导入数据</div>
+          <div class="file-upload-area" id="uploadArea" onclick="document.getElementById('csvFile').click()">
+            <i class="bi bi-cloud-upload"></i>
+            <p>点击选择 CSV 文件</p>
+            <p style="font-size:12px;color:#bbb;">格式：票号,购票人,班次号,起点,终点,座位类型,购票时间</p>
+          </div>
+          <input type="file" id="csvFile" accept=".csv" style="display:none" onchange="handleImport(event)">
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="glass-card">
+          <div class="card-title"><i class="bi bi-download"></i> 导出数据</div>
+          <p style="font-size:13px;color:#666;margin-bottom:16px;">导出全部车票数据为 CSV 文件，可用 Excel 打开。</p>
+          <button class="glass-btn btn-success" onclick="handleExport()"><i class="bi bi-file-earmark-spreadsheet"></i> 导出全部车票数据</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="glass-card">
+      <div class="card-title">车票数据预览</div>
+      <div style="overflow-x:auto;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>票号</th>
+              <th>购票人</th>
+              <th>班次号</th>
+              <th>起点</th>
+              <th>终点</th>
+              <th>座位类型</th>
+              <th>购票时间</th>
+            </tr>
+          </thead>
+          <tbody id="ticketBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/mock-data.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    if (!requireAdmin()) throw new Error('Not authorized');
+    renderSidebar('import-export');
+
+    function renderAllTickets() {
+      const tickets = getTickets();
+      const tbody = document.getElementById('ticketBody');
+      if (tickets.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-state"><i class="bi bi-inbox"></i>暂无车票数据</td></tr>';
+        return;
+      }
+      tbody.innerHTML = tickets.map(t => {
+        const cls = getClassById(t.classId);
+        return `<tr>
+          <td>${t.id}</td>
+          <td>${t.passenger}</td>
+          <td>${t.classId}</td>
+          <td>${cls ? cls.origin : '-'}</td>
+          <td>${cls ? cls.destination : '-'}</td>
+          <td><span class="seat-type">${t.seatType}</span></td>
+          <td>${t.purchaseTime}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    function handleExport() {
+      const tickets = getTickets();
+      if (tickets.length === 0) {
+        showToast('暂无数据可导出', 'error');
+        return;
+      }
+      const headers = ['票号', '购票人', '班次号', '起点', '终点', '座位类型', '购票时间'];
+      const data = tickets.map(t => {
+        const cls = getClassById(t.classId);
+        return [t.id, t.passenger, t.classId, cls ? cls.origin : '', cls ? cls.destination : '', t.seatType, t.purchaseTime];
+      });
+      exportCSV(data, '车票数据.csv', headers);
+      showToast('导出成功', 'success');
+    }
+
+    function handleImport(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        try {
+          const rows = parseCSV(evt.target.result);
+          if (rows.length === 0) {
+            showToast('CSV 文件为空或格式不正确', 'error');
+            return;
+          }
+
+          const tickets = getTickets();
+          let imported = 0;
+
+          rows.forEach(cols => {
+            // Expected: 票号,购票人,班次号,起点,终点,座位类型,购票时间
+            const classId = cols[2];
+            const cls = getClassById(classId);
+            if (!cls) return; // Skip invalid class
+
+            const ticket = {
+              id: cols[0] || generateTicketId(),
+              passenger: cols[1] || '未知',
+              classId: classId,
+              seatType: cols[5] || '靠窗/前排',
+              purchaseTime: cols[6] || formatDateTime(),
+              userId: 0
+            };
+            tickets.push(ticket);
+            imported++;
+          });
+
+          setTickets(tickets);
+          showToast(`成功导入 ${imported} 条记录`, 'success');
+          renderAllTickets();
+        } catch (err) {
+          showToast('导入失败：' + err.message, 'error');
+        }
+      };
+      reader.readAsText(file, 'utf-8');
+      e.target.value = ''; // Reset file input
+    }
+
+    renderAllTickets();
+  </script>
+</body>
+</html>

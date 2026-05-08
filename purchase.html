@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>购票 - 车票管理系统</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="css/style.css" rel="stylesheet">
+</head>
+<body>
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+    <div class="page-title"><i class="bi bi-ticket-perforated"></i> 购票</div>
+
+    <div class="glass-card">
+      <div class="card-title">购买车票</div>
+      <form id="purchaseForm" onsubmit="return handlePurchase(event)">
+        <div class="row">
+          <div class="col-md-6">
+            <div class="form-group">
+              <label>购票人姓名</label>
+              <input type="text" id="passenger" required placeholder="请输入姓名">
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="form-group">
+              <label>选择班次</label>
+              <select id="classSelect" required>
+                <option value="">请选择班次</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="col-md-6">
+            <div class="form-group">
+              <label>座位位置</label>
+              <select id="seatPosition" required>
+                <option value="靠窗">靠窗</option>
+                <option value="过道">过道</option>
+              </select>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="form-group">
+              <label>座位区域</label>
+              <select id="seatArea" required>
+                <option value="前排">前排</option>
+                <option value="后排">后排</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div id="classInfo" style="display:none; margin-bottom:16px; padding:12px 16px; background:rgba(26,115,232,0.06); border-radius:8px; font-size:13px; color:#555;">
+        </div>
+        <button type="submit" class="glass-btn btn-success"><i class="bi bi-cart-check"></i> 购票</button>
+      </form>
+    </div>
+
+    <div class="glass-card">
+      <div class="card-title">我的购票记录</div>
+      <div style="overflow-x:auto;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>票号</th>
+              <th>班次</th>
+              <th>路线</th>
+              <th>座位</th>
+              <th>购票时间</th>
+            </tr>
+          </thead>
+          <tbody id="myTicketsBody"></tbody>
+        </table>
+      </div>
+      <div style="margin-top:16px;">
+        <button class="glass-btn btn-outline" onclick="exportMyTickets()"><i class="bi bi-download"></i> 导出我的购票信息</button>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/mock-data.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    if (!requireUser()) throw new Error('Not authorized');
+    renderSidebar('purchase');
+
+    const currentUserId = parseInt(localStorage.getItem('userId'));
+
+    function loadClassOptions() {
+      const select = document.getElementById('classSelect');
+      const classes = getClasses();
+      select.innerHTML = '<option value="">请选择班次</option>';
+      classes.forEach(cls => {
+        const remaining = getRemainingSeats(cls.id);
+        const status = getClassStatus(cls.id);
+        if (status === 'pending' && remaining > 0) {
+          const opt = document.createElement('option');
+          opt.value = cls.id;
+          opt.textContent = `${cls.id} | ${cls.origin}→${cls.destination} | ${cls.departure} | 余座:${remaining}`;
+          select.appendChild(opt);
+        }
+      });
+    }
+
+    document.getElementById('classSelect').addEventListener('change', function() {
+      const infoDiv = document.getElementById('classInfo');
+      if (this.value) {
+        const cls = getClassById(this.value);
+        const remaining = getRemainingSeats(this.value);
+        infoDiv.innerHTML = `<i class="bi bi-info-circle"></i> 班次：${cls.id} | ${cls.origin} → ${cls.destination} | 出发：${cls.departure} | 行程：${cls.duration} | 余座：${remaining}/${cls.capacity}`;
+        infoDiv.style.display = 'block';
+      } else {
+        infoDiv.style.display = 'none';
+      }
+    });
+
+    function handlePurchase(e) {
+      e.preventDefault();
+      const passenger = document.getElementById('passenger').value.trim();
+      const classId = document.getElementById('classSelect').value;
+      const seatPosition = document.getElementById('seatPosition').value;
+      const seatArea = document.getElementById('seatArea').value;
+
+      if (!classId) {
+        showToast('请选择班次', 'error');
+        return false;
+      }
+
+      const remaining = getRemainingSeats(classId);
+      if (remaining <= 0) {
+        showToast('该班次已无余座', 'error');
+        return false;
+      }
+
+      const tickets = getTickets();
+      const newTicket = {
+        id: generateTicketId(),
+        passenger: passenger,
+        classId: classId,
+        seatType: seatPosition + '/' + seatArea,
+        purchaseTime: formatDateTime(),
+        userId: currentUserId
+      };
+      tickets.push(newTicket);
+      setTickets(tickets);
+
+      showToast('购票成功！票号：' + newTicket.id, 'success');
+      document.getElementById('purchaseForm').reset();
+      document.getElementById('classInfo').style.display = 'none';
+      loadClassOptions();
+      loadMyTickets();
+      return false;
+    }
+
+    function loadMyTickets() {
+      const tickets = getTickets().filter(t => t.userId === currentUserId);
+      const tbody = document.getElementById('myTicketsBody');
+      if (tickets.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><i class="bi bi-inbox"></i>暂无购票记录</td></tr>';
+        return;
+      }
+      tbody.innerHTML = tickets.map(t => {
+        const cls = getClassById(t.classId);
+        return `<tr>
+          <td>${t.id}</td>
+          <td>${t.classId}</td>
+          <td>${cls ? cls.origin + ' → ' + cls.destination : '-'}</td>
+          <td><span class="seat-type">${t.seatType}</span></td>
+          <td>${t.purchaseTime}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    function exportMyTickets() {
+      const tickets = getTickets().filter(t => t.userId === currentUserId);
+      if (tickets.length === 0) {
+        showToast('暂无购票记录可导出', 'error');
+        return;
+      }
+      const headers = ['票号', '购票人', '班次号', '起点', '终点', '座位类型', '购票时间'];
+      const data = tickets.map(t => {
+        const cls = getClassById(t.classId);
+        return [t.id, t.passenger, t.classId, cls ? cls.origin : '', cls ? cls.destination : '', t.seatType, t.purchaseTime];
+      });
+      exportCSV(data, '我的购票信息.csv', headers);
+      showToast('导出成功', 'success');
+    }
+
+    loadClassOptions();
+    loadMyTickets();
+  </script>
+</body>
+</html>
